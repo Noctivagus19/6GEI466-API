@@ -1,12 +1,18 @@
 from datetime import datetime
 from flask import (
     Flask,
+    request,
+    Response,
+    jsonify,
 )
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from bson.json_util import dumps
+from geopy.geocoders import Nominatim
+from ip2geotools.databases.noncommercial import DbIpCity
 import json
 import pymongo
+from requests import get
 import urllib
 from urllib.parse import urlencode
 import urllib3
@@ -21,7 +27,10 @@ http = urllib3.PoolManager()
 db_client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = db_client['iss']
 col_astronaut = db['astronaut']
-col_iss_pos = db['iss_position']
+col_iss_pos = db['position']
+col_pass_time = db['pass_time']
+
+geolocator = Nominatim(user_agent="6GEI466_API")
 
 
 @app.route('/api/v1/iss/astronauts', methods=["GET"])
@@ -36,6 +45,24 @@ def iss_positions():
     return dumps(positions)
 
 
+@app.route('/api/v1/iss/pass-times', methods=["GET"])
+def iss_pass_times():
+    user_ip = request.remote_addr \
+        if request.remote_addr != "127.0.0.1" \
+        else get("https://api.ipify.org/").text
+
+    user_loc_info = DbIpCity.get(user_ip, api_key='free')
+
+    user_pass_time = get_iss_pass_times(user_loc_info)
+    if user_pass_time:
+        return dumps(user_pass_time)
+    else:
+        return Response(
+            "Could not retrieve pass times.",
+            status=500,
+        )
+
+
 def up_in_space():
     r = http.request('GET', 'http://api.open-notify.org/astros.json')
     obj = json.loads(r.data)
@@ -48,17 +75,63 @@ def up_in_space():
     col_astronaut.insert_many(iss_astronauts)
 
 
+def get_user_location(ip):
+    return
+
+
 def get_iss_position():
     r = http.request('GET', 'http://api.open-notify.org/iss-now.json')
     obj = json.loads(r.data)
     longitude = obj['iss_position']['longitude']
     latitude = obj['iss_position']['latitude']
+
+    reverse = geolocator.reverse(f"{latitude}, {longitude}", language='en')
+
+    try:
+        state = reverse.raw['address']['state']
+        country = reverse.raw['address']['country']
+        location = f"{state}, {country}"
+    except:
+        location = "Unknown"
+
     col_iss_pos.insert(
         {
             "longitude": longitude,
             "latitude": latitude,
+            "location": location,
         }
     )
+
+
+def get_iss_pass_times(user_loc):
+    user_pass_time = {
+        "location":
+            {
+                "country": user_loc.country,
+                "region": user_loc.region,
+                "city": user_loc.city,
+            }
+    }
+    result = col_pass_time.find_one(user_pass_time)
+
+    if result:
+        return result
+    else:
+        lat = user_loc.latitude
+        lon = user_loc.longitude
+
+        r = http.request("GET", f"http://api.open-notify.org/iss-pass.json?lat={lat}&lon={lon}")
+        obj = json.loads(r.data)
+
+        if obj["message"] == "success":
+            iss_risetimes = []
+            for response in obj["response"]:
+                iss_risetimes.append(datetime.fromtimestamp(response['risetime']))
+
+            user_pass_time["rise_time"] = iss_risetimes
+            col_pass_time.insert_one(user_pass_time)
+
+            return user_pass_time
 
 
 def search_wikipedia(term):
