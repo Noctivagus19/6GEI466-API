@@ -75,10 +75,6 @@ def up_in_space():
     col_astronaut.insert_many(iss_astronauts)
 
 
-def get_user_location(ip):
-    return
-
-
 def get_iss_position():
     r = http.request('GET', 'http://api.open-notify.org/iss-now.json')
     obj = json.loads(r.data)
