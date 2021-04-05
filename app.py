@@ -24,10 +24,11 @@ db = db_client['iss']
 col_astronaut = db['astronaut']
 
 
-@app.route('/api/v1/iss/astronauts', methods=['GET'])
+@app.route('/api/v1/iss/astronauts', methods=["GET"])
 def iss_astronauts():
     astronauts = col_astronaut.find({})
     return dumps(astronauts)
+
 
 
 def up_in_space():
