@@ -1,7 +1,6 @@
 from datetime import datetime
 from flask import (
     Flask,
-    jsonify,
 )
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,12 +21,19 @@ http = urllib3.PoolManager()
 db_client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = db_client['iss']
 col_astronaut = db['astronaut']
+col_iss_pos = db['iss_position']
 
 
 @app.route('/api/v1/iss/astronauts', methods=["GET"])
 def iss_astronauts():
     astronauts = col_astronaut.find({})
     return dumps(astronauts)
+
+
+@app.route('/api/v1/iss/positions', methods=["GET"])
+def iss_positions():
+    positions = col_iss_pos.find({})
+    return dumps(positions)
 
 
 def up_in_space():
@@ -40,6 +46,19 @@ def up_in_space():
             iss_astronauts.append(astro)
 
     col_astronaut.insert_many(iss_astronauts)
+
+
+def get_iss_position():
+    r = http.request('GET', 'http://api.open-notify.org/iss-now.json')
+    obj = json.loads(r.data)
+    longitude = obj['iss_position']['longitude']
+    latitude = obj['iss_position']['latitude']
+    col_iss_pos.insert(
+        {
+            "longitude": longitude,
+            "latitude": latitude,
+        }
+    )
 
 
 def search_wikipedia(term):
@@ -89,11 +108,22 @@ def search_wikipedia(term):
 
 
 @scheduler.scheduled_job('interval', minutes=15, next_run_time=datetime.now())
-def update_caching():
-    print(f"The scheduled job runned at {datetime.now()}")
-
+def update_astro_in_iss():
     col_astronaut.remove({})
     up_in_space()
+
+    print(f"update_astro_in_iss job runned at {datetime.now()}")
+
+
+@scheduler.scheduled_job('interval', minutes=1, next_run_time=datetime.now())
+def update_iss_positions():
+    positions = col_iss_pos.find({})
+    if positions.count() > 60:
+        col_iss_pos.remove({})
+
+    get_iss_position()
+
+    print(f"update_iss_positions job runned at {datetime.now()}")
 
 
 if __name__ == '__main__':
