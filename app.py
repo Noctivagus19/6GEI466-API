@@ -30,7 +30,6 @@ def iss_astronauts():
     return dumps(astronauts)
 
 
-
 def up_in_space():
     r = http.request('GET', 'http://api.open-notify.org/astros.json')
     obj = json.loads(r.data)
@@ -64,6 +63,27 @@ def search_wikipedia(term):
         page_title = str.replace(first_result['title'], ' ', '_')
         wiki_page['url'] = f'https://en.wikipedia.org/wiki/{page_title}'
         wiki_page['snippet'] = first_result['snippet']
+
+        page_id = str(first_result["pageid"])
+
+        payload = {
+            'action': 'query',
+            'prop': 'pageimages',
+            'titles': first_result['title'],
+            'format': 'json',
+            'pithumbsize': 200,
+        }
+
+        payload = urlencode(payload, quote_via=urllib.parse.quote)
+        link = f'{wiki_url}w/api.php?{payload}'
+        r = http.request('GET', link)
+
+        obj = json.loads(r.data)
+        if len(obj['query']['pages']) > 0:
+            try:
+                wiki_page['image'] = obj['query']['pages'][page_id]['thumbnail']['source']
+            except:
+                wiki_page['image'] = None
 
     return wiki_page
 
