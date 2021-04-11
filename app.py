@@ -195,5 +195,12 @@ def update_iss_positions():
     print(f"update_iss_positions job runned at {datetime.now()}")
 
 
+@scheduler.scheduled_job('interval', minutes=60, next_run_time=datetime.now())
+def update_pass_times():
+    col_pass_time.remove({})
+
+    print(f"update_pass_times job runned at {datetime.now()}")
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port='8080', debug=True)
