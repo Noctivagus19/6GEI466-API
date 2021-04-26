@@ -135,7 +135,7 @@ def search_wikipedia(term):
         'action': 'query',
         'list': 'search',
         'prop': 'pageimages',
-        'srsearch': f'{term} astronaut',
+        'srsearch': f'{term}',
         'format': 'json',
     }
     payload = urlencode(payload, quote_via=urllib.parse.quote)
